@@ -1,17 +1,22 @@
-name: CD - Deploy bloxide.com
+name: Deploy bloxide.com
 
-# Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "master" branch
   push:
-    branches: ["gh-pages"]
+    branches: [ gh-pages ]
   pull_request:
-    branches: ["gh-pages"]
+    branches: [ gh-pages ]
 
-  # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
 
-# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -28,39 +33,29 @@ jobs:
             target
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
 
-      - name: Install Trunk
-        uses: jetli/trunk-action@v0.4.0
-        with:
-          # Optional version of trunk to install(eg. 'v0.16.0', 'latest')
-          version: "latest"
-      - name: Add wasm target
+      - name: Install dependencies
         run: |
-          rustup target add wasm32-unknown-unknown
-      - name: Create Empty Manga directory
-        # This prevents an issue from build.rs
-        run: |
-          mkdir -p ./src/assets/manga
+          cargo install trunk || true \
+            && rustup target add wasm32-unknown-unknown
+
       - name: Build the Rust WASM app and all of its assets
-        run: trunk build --public-url ${{ github.event.repository.name }} --release
+        run: trunk build --public-url ${{ github.event.repository.name }}
 
       - name: Setup Pages
-        uses: actions/configure-pages@v3
+        uses: actions/configure-pages@v2
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v1
         with:
-          path: "./dist"
+          path: './dist'
 
   deploy:
     needs: build
-    runs-on: ubuntu-latest
-    
-    permissions:
-      pages: write
-      id-token: write
+
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
 
+    runs-on: ubuntu-latest
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
